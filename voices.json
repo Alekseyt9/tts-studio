@@ -1,0 +1,30 @@
+[
+  {
+    "id": "user-prepared",
+    "name": "Пользовательский голос",
+    "description": "Подготовленный чистый образец",
+    "ref_audio": "reference_audio_2.wav",
+    "duration": 12
+  },
+  {
+    "id": "telegram-fragment",
+    "name": "Telegram",
+    "description": "Автоматически выбранный фрагмент",
+    "ref_audio": "reference_user_voice_10s.wav",
+    "duration": 10
+  },
+  {
+    "id": "user-original",
+    "name": "Исходная запись",
+    "description": "Полная пользовательская запись",
+    "ref_audio": "reference_user_voice.mp3",
+    "duration": 223
+  },
+  {
+    "id": "irina-system",
+    "name": "Ирина",
+    "description": "Системный голос",
+    "ref_audio": "reference_irina.wav",
+    "duration": 10
+  }
+]
