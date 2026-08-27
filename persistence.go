@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS chunks (
     duration REAL NOT NULL,
     audio_url TEXT NOT NULL DEFAULT '',
     path TEXT NOT NULL DEFAULT '',
+	synthesis_attempt INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (job_id, id)
 );
 CREATE TABLE IF NOT EXISTS translation_parts (
@@ -118,6 +119,7 @@ CREATE INDEX IF NOT EXISTS jobs_created_at_idx ON jobs(created_at DESC);
 		`ALTER TABLE jobs ADD COLUMN error_message TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE jobs ADD COLUMN translation_chunk_size INTEGER NOT NULL DEFAULT 9000`,
 		`ALTER TABLE app_settings ADD COLUMN translation_chunk_size INTEGER NOT NULL DEFAULT 4000`,
+		`ALTER TABLE chunks ADD COLUMN synthesis_attempt INTEGER NOT NULL DEFAULT 0`,
 	} {
 		if _, err := s.db.Exec(migration); err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column") {
 			return err
@@ -179,11 +181,11 @@ ON CONFLICT(id) DO UPDATE SET
 	for _, chunk := range job.Chunks {
 		_, err := tx.Exec(`
 INSERT INTO chunks (job_id, id, start_pos, end_pos, characters, text, status,
-					progress, duration, audio_url, path, synthesis_seconds)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+					progress, duration, audio_url, path, synthesis_seconds, synthesis_attempt)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `, job.ID, chunk.ID, chunk.Start, chunk.End, chunk.Characters, chunk.Text,
 			chunk.Status, chunk.Progress, chunk.Duration, chunk.AudioURL, chunk.Path,
-			chunk.SynthesisSeconds)
+			chunk.SynthesisSeconds, chunk.SynthesisAttempt)
 		if err != nil {
 			return err
 		}
@@ -283,7 +285,7 @@ FROM jobs ORDER BY created_at DESC
 	for _, job := range jobs {
 		chunkRows, err := s.db.Query(`
 SELECT id, start_pos, end_pos, characters, text, status, progress, duration,
-			   audio_url, path, synthesis_seconds
+			   audio_url, path, synthesis_seconds, synthesis_attempt
 FROM chunks WHERE job_id = ? ORDER BY id
 `, job.ID)
 		if err != nil {
@@ -294,7 +296,7 @@ FROM chunks WHERE job_id = ? ORDER BY id
 			if err := chunkRows.Scan(&chunk.ID, &chunk.Start, &chunk.End,
 				&chunk.Characters, &chunk.Text, &chunk.Status, &chunk.Progress,
 				&chunk.Duration, &chunk.AudioURL, &chunk.Path,
-				&chunk.SynthesisSeconds); err != nil {
+				&chunk.SynthesisSeconds, &chunk.SynthesisAttempt); err != nil {
 				chunkRows.Close()
 				return nil, err
 			}

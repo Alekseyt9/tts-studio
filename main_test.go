@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -50,8 +51,9 @@ func TestTranslatorEnablesThinkingAnd16KContext(t *testing.T) {
 		context.Background(),
 		"One complete sentence.",
 		4000,
+		1,
 		nil,
-		func(_, _ int, _ float64) {},
+		func(_, _ int, _ float64, _, _ int) {},
 		func(_, _ int, _ string) error { return nil },
 	)
 	if err != nil {
@@ -60,7 +62,7 @@ func TestTranslatorEnablesThinkingAnd16KContext(t *testing.T) {
 	if translated != "Один полный перевод." {
 		t.Fatalf("unexpected translation: %q", translated)
 	}
-	if !received.Think {
+	if received.Think != true {
 		t.Fatal("thinking mode is disabled")
 	}
 	if !received.Stream {
@@ -68,6 +70,50 @@ func TestTranslatorEnablesThinkingAnd16KContext(t *testing.T) {
 	}
 	if received.Options["num_ctx"] != float64(16384) {
 		t.Fatalf("num_ctx = %#v, want 16384", received.Options["num_ctx"])
+	}
+	if received.Options["num_predict"] != float64(8192) {
+		t.Fatalf("num_predict = %#v, want 8192", received.Options["num_predict"])
+	}
+}
+
+func TestTranslatorAdaptivelySplitsOnlyFailedOuterChunk(t *testing.T) {
+	requests := 0
+	var saved string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request ollamaGenerateRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatal(err)
+		}
+		requests++
+		if request.Options["num_predict"] != float64(2048) {
+			t.Errorf("retry num_predict = %#v, want 2048", request.Options["num_predict"])
+		}
+		_ = json.NewEncoder(w).Encode(ollamaGenerateResponse{Response: fmt.Sprintf("Перевод %d.", requests), Done: true})
+	}))
+	defer server.Close()
+
+	sentence := strings.Repeat("word ", 75) + "."
+	source := sentence + " " + sentence + " " + sentence
+	translator := &OllamaTranslator{URL: server.URL, Model: "gemma4:12b", Client: &http.Client{Timeout: time.Second}}
+	translated, err := translator.Translate(
+		context.Background(), source, 4000, 4, nil,
+		func(_, _ int, _ float64, _, _ int) {},
+		func(index, total int, translatedPart string) error {
+			if index != 1 || total != 1 {
+				t.Fatalf("outer chunk identity changed: index=%d total=%d", index, total)
+			}
+			saved = translatedPart
+			return nil
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requests != 3 {
+		t.Fatalf("adaptive sections = %d, want 3", requests)
+	}
+	if translated != saved || !strings.Contains(saved, "Перевод 1.") || !strings.Contains(saved, "Перевод 3.") {
+		t.Fatalf("adaptive translation was not recombined: translated=%q saved=%q", translated, saved)
 	}
 }
 
@@ -101,6 +147,50 @@ func TestTranslatorReportsApproximateStreamingProgress(t *testing.T) {
 	}
 }
 
+func TestOllamaRequestSerializesExplicitThinkFalse(t *testing.T) {
+	body, err := json.Marshal(ollamaGenerateRequest{Model: "gemma4:12b", Think: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), `"think":false`) {
+		t.Fatalf("explicit think=false was omitted: %s", body)
+	}
+}
+
+func TestSynthesisTimeoutUsesCompletedChunkSpeed(t *testing.T) {
+	studio := &Studio{}
+	job := &Job{Chunks: []*Chunk{
+		{ID: 1, Characters: 1000, Status: "ready", SynthesisSeconds: 200},
+		{ID: 2, Characters: 1000, Status: "ready", SynthesisSeconds: 200},
+	}}
+	target := &Chunk{ID: 3, Characters: 1200}
+	got := studio.synthesisTimeout(job, target)
+	want := 12 * time.Minute
+	if got != want {
+		t.Fatalf("timeout = %s, want %s", got, want)
+	}
+}
+
+func TestTTSFallbackShrinksOnRetriesWithoutSplittingSentences(t *testing.T) {
+	text := strings.Repeat("Это достаточно длинное предложение для проверки безопасного разбиения. ", 12)
+	first := splitTTSFallback(text, 1200, 1)
+	second := splitTTSFallback(text, 1200, 2)
+	fourth := splitTTSFallback(text, 1200, 4)
+	if len(first) != 1 {
+		t.Fatalf("first attempt parts = %d, want 1", len(first))
+	}
+	if len(second) < 2 || len(fourth) < len(second) {
+		t.Fatalf("fallback did not shrink: second=%d fourth=%d", len(second), len(fourth))
+	}
+	for _, parts := range [][]string{second, fourth} {
+		for _, part := range parts {
+			if !strings.HasSuffix(strings.TrimSpace(part), ".") {
+				t.Fatalf("fallback split inside a sentence: %q", part)
+			}
+		}
+	}
+}
+
 func TestSQLiteStoreRoundTripAndDelete(t *testing.T) {
 	store, err := NewSQLiteStore(filepath.Join(t.TempDir(), "state.db"))
 	if err != nil {
@@ -116,7 +206,7 @@ func TestSQLiteStoreRoundTripAndDelete(t *testing.T) {
 		TranslationChunkSize: 4000, TranslationAttempt: 2, ErrorMessage: "temporary error",
 		TranslationURL: "/audio/job-1/translation.txt", CreatedAt: time.Now(),
 		TranslationParts: []string{"Привет."},
-		Chunks:           []*Chunk{{ID: 1, Start: 1, End: 7, Characters: 7, Text: "Привет.", Status: "queued", SynthesisSeconds: 12.5}},
+		Chunks:           []*Chunk{{ID: 1, Start: 1, End: 7, Characters: 7, Text: "Привет.", Status: "queued", SynthesisSeconds: 12.5, SynthesisAttempt: 2}},
 	}
 	if err := store.SaveJob(job); err != nil {
 		t.Fatal(err)
@@ -125,7 +215,7 @@ func TestSQLiteStoreRoundTripAndDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(jobs) != 1 || jobs[0].Text != "Привет." || len(jobs[0].Chunks) != 1 || len(jobs[0].TranslationParts) != 1 || jobs[0].Chunks[0].SynthesisSeconds != 12.5 || jobs[0].TranslationAttempt != 2 || jobs[0].ErrorMessage != "temporary error" || jobs[0].TranslationChunkSize != 4000 {
+	if len(jobs) != 1 || jobs[0].Text != "Привет." || len(jobs[0].Chunks) != 1 || len(jobs[0].TranslationParts) != 1 || jobs[0].Chunks[0].SynthesisSeconds != 12.5 || jobs[0].Chunks[0].SynthesisAttempt != 2 || jobs[0].TranslationAttempt != 2 || jobs[0].ErrorMessage != "temporary error" || jobs[0].TranslationChunkSize != 4000 {
 		t.Fatalf("state was not restored: %#v", jobs)
 	}
 	if err := store.DeleteJob(job.ID); err != nil {
@@ -218,7 +308,7 @@ func TestApproximateProgressIsNotPersistedUntilChunkCompletes(t *testing.T) {
 	if err := store.SaveJob(job); err != nil {
 		t.Fatal(err)
 	}
-	studio.setTranslationProgress(job, 0, 1, 0.63)
+	studio.setTranslationProgress(job, 0, 1, 0.63, 2, 4)
 	loaded, err := store.LoadJobs()
 	if err != nil {
 		t.Fatal(err)
@@ -322,16 +412,26 @@ func TestRetryFailedTranslationKeepsCompletedChunks(t *testing.T) {
 	}
 }
 
-func TestTranslationRetriesUnfinishedChunkThreeTimes(t *testing.T) {
+func TestTranslationRetriesUnfinishedChunkWithoutLimit(t *testing.T) {
 	oldDelay := translationRetryBaseDelay
 	translationRetryBaseDelay = time.Millisecond
 	defer func() { translationRetryBaseDelay = oldDelay }()
 
 	attempts := 0
+	unloads := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request ollamaGenerateRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatal(err)
+		}
+		if request.Prompt == "" && request.KeepAlive != nil {
+			unloads++
+			_ = json.NewEncoder(w).Encode(ollamaGenerateResponse{Done: true})
+			return
+		}
 		attempts++
 		encoder := json.NewEncoder(w)
-		if attempts < 3 {
+		if attempts < 5 {
 			_ = encoder.Encode(ollamaGenerateResponse{Thinking: "Думаю слишком долго"})
 			return
 		}
@@ -356,7 +456,7 @@ func TestTranslationRetriesUnfinishedChunkThreeTimes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if translated != "Перевод." || attempts != 3 || len(job.TranslationParts) != 1 {
-		t.Fatalf("translated=%q attempts=%d parts=%#v", translated, attempts, job.TranslationParts)
+	if translated != "Перевод." || attempts != 5 || unloads != 4 || len(job.TranslationParts) != 1 {
+		t.Fatalf("translated=%q attempts=%d unloads=%d parts=%#v", translated, attempts, unloads, job.TranslationParts)
 	}
 }
