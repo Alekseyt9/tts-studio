@@ -117,6 +117,7 @@ CREATE INDEX IF NOT EXISTS jobs_created_at_idx ON jobs(created_at DESC);
 		return err
 	}
 	for _, migration := range []string{
+		`ALTER TABLE chunks ADD COLUMN tts_model TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE jobs ADD COLUMN tts_model TEXT NOT NULL DEFAULT 'qwen'`,
 		`ALTER TABLE jobs ADD COLUMN translation_model TEXT NOT NULL DEFAULT 'gemma4_think'`,
 		`ALTER TABLE app_settings ADD COLUMN tts_model TEXT NOT NULL DEFAULT 'faster'`,
@@ -188,11 +189,11 @@ ON CONFLICT(id) DO UPDATE SET
 	for _, chunk := range job.Chunks {
 		_, err := tx.Exec(`
 INSERT INTO chunks (job_id, id, start_pos, end_pos, characters, text, status,
-					progress, duration, audio_url, path, synthesis_seconds, synthesis_attempt)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+					progress, duration, audio_url, path, synthesis_seconds, synthesis_attempt, tts_model)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `, job.ID, chunk.ID, chunk.Start, chunk.End, chunk.Characters, chunk.Text,
 			chunk.Status, chunk.Progress, chunk.Duration, chunk.AudioURL, chunk.Path,
-			chunk.SynthesisSeconds, chunk.SynthesisAttempt)
+			chunk.SynthesisSeconds, chunk.SynthesisAttempt, chunk.TTSModel)
 		if err != nil {
 			return err
 		}
@@ -294,7 +295,7 @@ FROM jobs ORDER BY created_at DESC
 	for _, job := range jobs {
 		chunkRows, err := s.db.Query(`
 SELECT id, start_pos, end_pos, characters, text, status, progress, duration,
-			   audio_url, path, synthesis_seconds, synthesis_attempt
+			   audio_url, path, synthesis_seconds, synthesis_attempt, tts_model
 FROM chunks WHERE job_id = ? ORDER BY id
 `, job.ID)
 		if err != nil {
@@ -305,9 +306,15 @@ FROM chunks WHERE job_id = ? ORDER BY id
 			if err := chunkRows.Scan(&chunk.ID, &chunk.Start, &chunk.End,
 				&chunk.Characters, &chunk.Text, &chunk.Status, &chunk.Progress,
 				&chunk.Duration, &chunk.AudioURL, &chunk.Path,
-				&chunk.SynthesisSeconds, &chunk.SynthesisAttempt); err != nil {
+				&chunk.SynthesisSeconds, &chunk.SynthesisAttempt, &chunk.TTSModel); err != nil {
 				chunkRows.Close()
 				return nil, err
+			}
+			if chunk.Status == "ready" && chunk.TTSModel == "" {
+				chunk.TTSModel = job.TTSModel
+				if chunk.TTSModel == "" {
+					chunk.TTSModel = "qwen"
+				}
 			}
 			job.Chunks = append(job.Chunks, chunk)
 		}

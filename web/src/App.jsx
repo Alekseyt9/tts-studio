@@ -27,6 +27,7 @@ function App() {
   const [,refreshBookmark]=useState(0);
   const bookmarkChanged=()=>refreshBookmark(value=>value+1);
   const [models,setModels]=useState({tts:[],translation:[]});
+  const [resumeModels,setResumeModels]=useState({});
   const [ttsModel,setTTSModel]=useState('faster'), [translationModel,setTranslationModel]=useState('gemma4_direct');
   const omni=ttsModel.startsWith('omni');
   const modelName=(kind,id)=>models[kind].find(m=>m.id===id)?.name||id;
@@ -67,7 +68,8 @@ function App() {
   const filteredVoices=voices.filter(v=>`${v.name} ${v.description}`.toLocaleLowerCase('ru-RU').includes(voiceSearch.toLocaleLowerCase('ru-RU')));
   const chars=text.length, ready=active?.chunks?.filter(c=>c.status==='ready').length||0;
   const elapsed=active?.chunks?.reduce((total,c)=>total+(c.synthesis_seconds||c.elapsed_seconds||0),0)||0;
-  const average=ready?active.chunks.reduce((total,c)=>total+(c.status==='ready'?(c.synthesis_seconds||0):0),0)/ready:0;
+  const sameModelChunks=active?.chunks?.filter(c=>c.status==='ready'&&(!c.tts_model||c.tts_model===active.tts_model))||[];
+  const average=sameModelChunks.length?sameModelChunks.reduce((total,c)=>total+(c.synthesis_seconds||0),0)/sameModelChunks.length:0;
   const remaining=Math.max(0,(active?.chunks?.length||0)-ready)*(average||0);
   const phase=active?.status==='ready'?3:['translating'].includes(active?.status)?1:active?2:0;
 
@@ -77,7 +79,7 @@ function App() {
   const merge=async id=>{const res=await fetch(`/api/jobs/${id}/merge`,{method:'POST'});if(!res.ok)setError(await res.text());load()};
   const clearReady=async()=>{await fetch('/api/jobs/ready',{method:'DELETE'});setSelected(null);load()};
   const removeJob=async id=>{if(!window.confirm('Удалить задание из очереди и базы данных? Аудиофайлы на диске останутся.'))return;const res=await fetch(`/api/jobs/${id}`,{method:'DELETE'});if(!res.ok){setError(await res.text());return}if(selected===id)setSelected(null);load()};
-  const controlJob=async(job,action)=>{const res=await fetch(`/api/jobs/${job.id}/${action}`,{method:'POST'});if(!res.ok){setError(await res.text());return}load()};
+  const controlJob=async(job,action)=>{const options=action==='resume'?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tts_model:resumeModels[job.id]||job.tts_model||'qwen'})}:{method:'POST'};const res=await fetch(`/api/jobs/${job.id}/${action}`,options);if(!res.ok){setError(await res.text());return}setResumeModels(current=>{const next={...current};delete next[job.id];return next});load()};
   const chunkAudioKey=(job,chunk)=>`${job.id}:${chunk.id}`;
   const stopOtherChunks=currentKey=>{for(const [key,audio] of chunkAudioRefs.current){if(key!==currentKey&&!audio.paused)audio.pause()}};
   const playNextChunk=(job,index)=>{
@@ -121,6 +123,7 @@ function App() {
         {!active?<div className="active-empty"><Headphones/><strong>Нет активного задания</strong><span>Создайте его в панели справа</span></div>:<>
           <div className="active-header"><div><span>АКТИВНОЕ ЗАДАНИЕ</span><h1>{active.title}</h1></div>{active.status==='failed'?<button className="job-action resume" onClick={()=>controlJob(active,'retry')}><ArrowClockwise/>{retryLabel}</button>:active.status==='paused'?<button className="job-action resume" onClick={()=>controlJob(active,'resume')}><Play/>Продолжить</button>:!['ready','pausing'].includes(active.status)&&<button className="job-action" onClick={()=>controlJob(active,'pause')}><Pause/>Пауза</button>}</div>
           <div className="job-models">{modelName('translation',active.translation_model||'gemma4_think')} → {modelName('tts',active.tts_model||'qwen')}</div>
+          {active.status==='paused'&&<div className="resume-model"><label><span>Модель при продолжении озвучки</span><select aria-label="Модель при продолжении озвучки" value={resumeModels[active.id]||active.tts_model||'qwen'} onChange={e=>setResumeModels(current=>({...current,[active.id]:e.target.value}))}>{models.tts.map(model=><option key={model.id} value={model.id}>{speedLabel(model)}</option>)}</select></label><small>Нажмите «Продолжить», чтобы применить выбор к оставшимся фрагментам. Готовое аудио сохраняется; тембр и темп могут отличаться.</small></div>}
           <div className="phase-track">
             <div className={`phase ${phase>=1?'done':''}`}><i><Check/></i><strong>Перевод</strong><small>{active.translation_chunks?`${Math.min(active.translation_chunk,active.translation_chunks)}/${active.translation_chunks} чанков`:'Ожидание'}</small></div>
             <div className={`phase ${phase===2?'current':phase>2?'done':''}`}><i><Waveform/></i><strong>Озвучка</strong><small>{ready}/{active.chunks.length||0} фрагм.</small></div>
@@ -134,7 +137,7 @@ function App() {
             <button disabled={!active.chunks.length||ready!==active.chunks.length||active.status==='merging'} onClick={()=>merge(active.id)}><Waveform/>{active.status==='merging'?'Склеиваем…':'Склеить вручную'}</button>
           </div>
           {active.chunks.length===0?(active.status==='failed'?<div className="failure-state"><WarningCircle/><strong>Перевод остановлен</strong><span>{active.error_message||'Не удалось завершить переводческий чанк'}</span><small>Готово {active.translation_chunk} из {active.translation_chunks||1} чанков</small><button onClick={()=>controlJob(active,'retry')}><ArrowClockwise/>Повторить {Math.min(active.translation_chunk+1,active.translation_chunks||1)}-й чанк</button></div>:<div className="phase-wait"><SpinnerGap className={workingStatuses.includes(active.status)?'spin':''}/><strong>{statusText[active.status]}</strong><span>{active.status==='translating'?`Чанк ${Math.min(active.translation_chunk+1,active.translation_chunks||1)} из ${active.translation_chunks||1}${active.translation_sections?` · секция ${active.translation_section} из ${active.translation_sections}`:''} · ≈ ${active.translation_progress}%${active.translation_attempt>1?` · попытка ${active.translation_attempt}`:''}`:active.status==='paused'?'Незавершённый чанк начнётся с начала':'Подготовка модели'}</span></div>):<div className="chunk-table"><div className="chunk-table-head"><span>#</span><span>ФРАГМЕНТ</span><span>СТАТУС</span><span>АУДИО</span><span>ВРЕМЯ</span><span></span></div><div className="chunk-scroll">{active.chunks.map((chunk,index)=><div className={`chunk-row ${chunk.status==='running'?'active':''} ${listeningChunk?.id===chunk.id?'listening':''}`} key={`${active.id}:${chunk.id}`}>
-            <span>{index+1}</span><span className="chunk-name"><strong>{chunk.start}–{chunk.end}</strong><small>{chunk.characters} знаков</small></span><span className="chunk-state"><Status value={chunk.status}/>{chunk.status==='running'&&<small>≈ {chunk.progress||5}%</small>}</span>
+            <span>{index+1}</span><span className="chunk-name"><strong>{chunk.start}–{chunk.end}</strong><small>{chunk.characters} знаков</small>{chunk.status==='ready'&&chunk.tts_model&&<small title={modelName('tts',chunk.tts_model)}>{modelName('tts',chunk.tts_model)}</small>}</span><span className="chunk-state"><Status value={chunk.status}/>{chunk.status==='running'&&<small>≈ {chunk.progress||5}%</small>}</span>
             <span className="chunk-audio">{chunk.status==='ready'?<><ChunkAudio key={`${active.id}:${chunk.id}:${chunk.audio_url}`} jobId={active.id} chunk={chunk} memory={playback} audioRefs={chunkAudioRefs} onBookmark={bookmarkChanged} onPlay={()=>stopOtherChunks(chunkAudioKey(active,chunk))} onEnded={()=>playNextChunk(active,index)}/><a href={chunk.audio_url} download title="Скачать"><DownloadSimple/></a></>:<i><em style={{width:chunk.status==='running'?`${chunk.progress||5}%`:'0%'}}/></i>}</span>
             <span className="chunk-time">{chunk.status==='running'?<><strong>{runtime(chunk.elapsed_seconds)}</strong><small>прошло</small></>:chunk.status==='ready'?<><strong>{chunk.synthesis_seconds>0?runtime(chunk.synthesis_seconds):'—'}</strong><small>{chunk.duration?`${chunk.duration.toFixed(1)} с аудио`:'готово'}</small></>:<strong>—</strong>}</span><span></span>
           </div>)}</div></div>}

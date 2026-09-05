@@ -29,6 +29,7 @@ import (
 var webFiles embed.FS
 
 type Chunk struct {
+	TTSModel         string  `json:"tts_model,omitempty"`
 	ID               int     `json:"id"`
 	Start            int     `json:"start"`
 	End              int     `json:"end"`
@@ -357,7 +358,7 @@ func (s *Studio) jobHandler(w http.ResponseWriter, r *http.Request) {
 			s.pauseJob(w, parts[0])
 			return
 		case "resume":
-			s.resumeJob(w, parts[0])
+			s.resumeJob(w, r, parts[0])
 			return
 		case "retry":
 			s.retryJob(w, parts[0])
@@ -416,7 +417,22 @@ func (s *Studio) pauseJob(w http.ResponseWriter, id string) {
 	writeJSON(w, job)
 }
 
-func (s *Studio) resumeJob(w http.ResponseWriter, id string) {
+func (s *Studio) resumeJob(w http.ResponseWriter, r *http.Request, id string) {
+	var request struct {
+		TTSModel string `json:"tts_model"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&request); err != nil && err != io.EOF {
+		http.Error(w, "invalid resume options", http.StatusBadRequest)
+		return
+	}
+	if request.TTSModel != "" {
+		if _, ok := findModel(ttsModels, request.TTSModel); !ok {
+			http.Error(w, "unknown TTS model", http.StatusBadRequest)
+			return
+		}
+	}
 	s.mu.Lock()
 	job := s.jobs[id]
 	if job == nil {
@@ -429,17 +445,40 @@ func (s *Studio) resumeJob(w http.ResponseWriter, id string) {
 		http.Error(w, "job is not paused", http.StatusConflict)
 		return
 	}
-	job.Status = "queued"
-	if job.TranslationStatus != "ready" {
-		job.TranslationStatus = "queued"
+	next := *job
+	if request.TTSModel != "" && request.TTSModel != job.TTSModel {
+		if !strings.HasPrefix(request.TTSModel, "omni") && !job.SpeakerOnly && strings.TrimSpace(job.RefText) == "" {
+			s.mu.Unlock()
+			http.Error(w, "Для Qwen нужен транскрипт образца или режим «только тембр»", http.StatusBadRequest)
+			return
+		}
+		next.TTSModel = request.TTSModel
 	}
-	s.mu.Unlock()
-	if err := s.persistJob(job); err != nil {
+	next.Chunks = make([]*Chunk, len(job.Chunks))
+	for i, chunk := range job.Chunks {
+		copy := *chunk
+		if copy.Status == "ready" && copy.TTSModel == "" {
+			copy.TTSModel = job.TTSModel
+			if copy.TTSModel == "" {
+				copy.TTSModel = "qwen"
+			}
+		}
+		next.Chunks[i] = &copy
+	}
+	next.Status = "queued"
+	if next.TranslationStatus != "ready" {
+		next.TranslationStatus = "queued"
+	}
+	// Persist the model before exposing the queued job to the worker.
+	if err := s.store.SaveJob(&next); err != nil {
+		s.mu.Unlock()
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	*job = next
+	s.mu.Unlock()
+	writeJSON(w, next)
 	s.enqueue(id)
-	writeJSON(w, job)
 }
 
 func (s *Studio) retryJob(w http.ResponseWriter, id string) {
@@ -1624,6 +1663,9 @@ func (s *Studio) updateChunk(j *Job, c *Chunk, status string, progress int) {
 		return
 	}
 	c.Status = status
+	if status == "ready" {
+		c.TTSModel = j.TTSModel
+	}
 	c.Progress = progress
 	done := 0
 	for _, x := range j.Chunks {
