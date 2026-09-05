@@ -110,9 +110,9 @@ type Studio struct {
 
 type OllamaTranslator struct {
 	Profile string
-	URL    string
-	Model  string
-	Client *http.Client
+	URL     string
+	Model   string
+	Client  *http.Client
 }
 
 type ollamaGenerateRequest struct {
@@ -233,10 +233,12 @@ func (s *Studio) health(w http.ResponseWriter, _ *http.Request) {
 		mode = "ready"
 	}
 	loaded := false
+	ttsModel := ""
 	if s.python != nil {
 		loaded = s.python.Loaded()
+		ttsModel = s.python.CurrentEngine()
 	}
-	writeJSON(w, map[string]any{"ok": true, "mode": mode, "model_loaded": loaded, "translation_model": s.translator.Model, "translation_context": 16384})
+	writeJSON(w, map[string]any{"ok": true, "mode": mode, "model_loaded": loaded, "tts_model": ttsModel, "translation_model": s.translator.Model, "translation_context": 16384})
 }
 
 func (s *Studio) shutdown(w http.ResponseWriter, r *http.Request) {
@@ -1124,7 +1126,7 @@ This is part %d of %d of one document, section %d of %d.
 				Model: o.Model, Prompt: prompt, Stream: true, Think: think, KeepAlive: "10m",
 				Options: map[string]any{
 					"num_ctx": 16384, "num_predict": numPredict, "temperature": temperature,
-					"seed": sectionAttempt*1000 + sectionIndex,
+					"seed":  sectionAttempt*1000 + sectionIndex,
 					"top_k": 64, "top_p": 0.95, "repeat_penalty": 1.0,
 				},
 			}
@@ -1367,7 +1369,7 @@ func (s *Studio) synthesizeText(ctx context.Context, job *Job, text, out string)
 	if s.python != nil {
 		response, err := s.python.Generate(map[string]any{
 			"engine": job.TTSModel,
-			"text": text, "ref_audio": job.RefAudio, "ref_text": job.RefText,
+			"text":   text, "ref_audio": job.RefAudio, "ref_text": job.RefText,
 			"output": out, "language": "Russian", "speaker_only": job.SpeakerOnly,
 		})
 		if err != nil {
@@ -1461,7 +1463,9 @@ func (p *PythonWorker) Preload(engines ...string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	engine := "qwen"
-	if len(engines) > 0 && engines[0] != "" { engine = engines[0] }
+	if len(engines) > 0 && engines[0] != "" {
+		engine = engines[0]
+	}
 	p.selectEngine(engine)
 	if p.cmd != nil {
 		return nil
@@ -1470,11 +1474,21 @@ func (p *PythonWorker) Preload(engines ...string) error {
 }
 
 func (p *PythonWorker) selectEngine(engine string) {
-	if engine == "" { engine = "qwen" }
+	if engine == "" {
+		engine = "qwen"
+	}
 	if p.engine != engine {
 		p.stop()
+		p.processMu.Lock()
 		p.engine = engine
+		p.processMu.Unlock()
 	}
+}
+
+func (p *PythonWorker) CurrentEngine() string {
+	p.processMu.Lock()
+	defer p.processMu.Unlock()
+	return p.engine
 }
 
 func (p *PythonWorker) start() error {

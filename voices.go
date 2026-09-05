@@ -104,8 +104,12 @@ func (s *Studio) settingsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Studio) normalizeSettings(settings AppSettings) AppSettings {
-	if _, ok := findModel(ttsModels, settings.TTSModel); !ok { settings.TTSModel = defaultTTSModel }
-	if _, ok := findModel(translationModels, settings.TranslationModel); !ok { settings.TranslationModel = defaultTranslationModel }
+	if _, ok := findModel(ttsModels, settings.TTSModel); !ok {
+		settings.TTSModel = defaultTTSModel
+	}
+	if _, ok := findModel(translationModels, settings.TranslationModel); !ok {
+		settings.TranslationModel = defaultTranslationModel
+	}
 	if settings.ChunkSize != 600 && settings.ChunkSize != 1200 && settings.ChunkSize != 2400 {
 		settings.ChunkSize = 1200
 	}

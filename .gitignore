@@ -24,3 +24,4 @@
 *.png
 /*.exe
 /benchmarks/2026-09-05/*.log
+/benchmarks/2026-09-05/*.exe
