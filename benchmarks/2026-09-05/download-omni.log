@@ -1,0 +1,84 @@
+EXISTS audio_tokenizer/.gitattributes
+EXISTS audio_tokenizer/LICENSE
+EXISTS audio_tokenizer/config.json
+START audio_tokenizer/model.safetensors 805665628 remaining 97
+PROGRESS audio_tokenizer/model.safetensors 1 97
+PROGRESS audio_tokenizer/model.safetensors 8 97
+PROGRESS audio_tokenizer/model.safetensors 13 97
+PROGRESS audio_tokenizer/model.safetensors 18 97
+PROGRESS audio_tokenizer/model.safetensors 24 97
+PROGRESS audio_tokenizer/model.safetensors 26 97
+PROGRESS audio_tokenizer/model.safetensors 31 97
+PROGRESS audio_tokenizer/model.safetensors 34 97
+PROGRESS audio_tokenizer/model.safetensors 38 97
+PROGRESS audio_tokenizer/model.safetensors 42 97
+PROGRESS audio_tokenizer/model.safetensors 43 97
+PROGRESS audio_tokenizer/model.safetensors 45 97
+PROGRESS audio_tokenizer/model.safetensors 50 97
+PROGRESS audio_tokenizer/model.safetensors 58 97
+PROGRESS audio_tokenizer/model.safetensors 62 97
+PROGRESS audio_tokenizer/model.safetensors 67 97
+PROGRESS audio_tokenizer/model.safetensors 73 97
+PROGRESS audio_tokenizer/model.safetensors 76 97
+PROGRESS audio_tokenizer/model.safetensors 77 97
+Traceback (most recent call last):
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\urllib\request.py", line 1344, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\http\client.py", line 1338, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\http\client.py", line 1384, in _send_request
+    self.endheaders(body, encode_chunked=encode_chunked)
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\http\client.py", line 1333, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\http\client.py", line 1093, in _send_output
+    self.send(msg)
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\http\client.py", line 1037, in send
+    self.connect()
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\http\client.py", line 1472, in connect
+    super().connect()
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\http\client.py", line 1003, in connect
+    self.sock = self._create_connection(
+                ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\socket.py", line 841, in create_connection
+    for res in getaddrinfo(host, port, 0, SOCK_STREAM):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\socket.py", line 978, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "F:\src\tts\benchmarks\2026-09-05\download_ranges.py", line 39, in <module>
+    done.add(future.result());donefile.write_text(json.dumps(sorted(done)))
+             ^^^^^^^^^^^^^^^
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\concurrent\futures\_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\concurrent\futures\_base.py", line 401, in __get_result
+    raise self._exception
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\concurrent\futures\thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "F:\src\tts\benchmarks\2026-09-05\download_ranges.py", line 26, in fetch
+    with urllib.request.urlopen(req,timeout=90) as r:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\urllib\request.py", line 215, in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\urllib\request.py", line 515, in open
+    response = self._open(req, data)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\urllib\request.py", line 532, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\urllib\request.py", line 492, in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\urllib\request.py", line 1392, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\aleks_000\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\Lib\urllib\request.py", line 1347, in do_open
+    raise URLError(err)
+urllib.error.URLError: <urlopen error [Errno 11001] getaddrinfo failed>

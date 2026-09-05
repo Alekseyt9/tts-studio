@@ -1,0 +1,14 @@
+[
+  {
+    "chunk": 1,
+    "characters": 1095,
+    "seconds": 200.6960029999973,
+    "audio_seconds": 69.52,
+    "rtf": 2.886881516110433,
+    "peak_vram_allocated_gb": 4.704225540161133,
+    "peak_vram_reserved_gb": 5.580078125,
+    "rms": 0.12466073036193848,
+    "peak": 0.890625,
+    "clipped_fraction": 0.0
+  }
+]

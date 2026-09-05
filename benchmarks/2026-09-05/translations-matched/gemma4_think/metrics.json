@@ -1,0 +1,38 @@
+{
+  "model": "gemma4:12b",
+  "think": true,
+  "options": {
+    "num_ctx": 16384,
+    "num_predict": 8192,
+    "temperature": 0.1,
+    "seed": 1000,
+    "top_k": 64,
+    "top_p": 0.95,
+    "repeat_penalty": 1.0
+  },
+  "chunks": [
+    {
+      "chunk": 1,
+      "wall_seconds": 154.64402929999778,
+      "primary_wall_seconds": 132.116740999998,
+      "fallback_used": true,
+      "final_output_complete": true,
+      "first_translation_seconds": null,
+      "source_characters": 3904,
+      "output_characters": 3946,
+      "thinking_characters": 32213,
+      "model": "gemma4:12b",
+      "created_at": "2026-09-05T18:46:49.3018388Z",
+      "done": true,
+      "done_reason": "length",
+      "total_duration": 132097297300,
+      "load_duration": 1542000,
+      "prompt_eval_count": 944,
+      "prompt_eval_cached_count": 0,
+      "prompt_eval_duration": 383152000,
+      "eval_count": 8192,
+      "eval_duration": 131668418000
+    }
+  ],
+  "total_seconds": 154.64402929999778
+}

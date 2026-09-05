@@ -1,0 +1,4 @@
+EXISTS config.json
+EXISTS model.bin
+SMALL tokenizer.json
+SMALL vocabulary.txt

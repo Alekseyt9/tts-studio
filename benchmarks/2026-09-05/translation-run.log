@@ -1,0 +1,13 @@
+WAIT_MODEL gemma4_think
+WARMUP gemma4_think
+START gemma4_think 1 3904
+DONE gemma4_think {'chunk': 1, 'wall_seconds': 132.61756690000038, 'first_translation_seconds': None, 'source_characters': 3904, 'output_characters': 0, 'thinking_characters': 28461, 'model': 'gemma4:12b', 'created_at': '2026-09-05T18:22:13.6615119Z', 'done': True, 'done_reason': 'length', 'total_duration': 132596133900, 'load_duration': 1531900, 'prompt_eval_count': 944, 'prompt_eval_cached_count': 0, 'prompt_eval_duration': 376839000, 'eval_count': 8192, 'eval_duration': 132184620000}
+START gemma4_think 2 2876
+DONE gemma4_think {'chunk': 2, 'wall_seconds': 133.6199517999994, 'first_translation_seconds': None, 'source_characters': 2876, 'output_characters': 0, 'thinking_characters': 29331, 'model': 'gemma4:12b', 'created_at': '2026-09-05T18:24:27.2809089Z', 'done': True, 'done_reason': 'length', 'total_duration': 133597129000, 'load_duration': 2254700, 'prompt_eval_count': 772, 'prompt_eval_cached_count': 0, 'prompt_eval_duration': 328140000, 'eval_count': 8192, 'eval_duration': 133007506000}
+WAIT_MODEL gemma4_direct
+WARMUP gemma4_direct
+START gemma4_direct 1 3904
+DONE gemma4_direct {'chunk': 1, 'wall_seconds': 17.64579849999427, 'first_translation_seconds': 0.4117072999943048, 'source_characters': 3904, 'output_characters': 3963, 'thinking_characters': 0, 'model': 'gemma4:12b', 'created_at': '2026-09-05T18:24:50.0673702Z', 'done': True, 'done_reason': 'stop', 'total_duration': 17636405700, 'load_duration': 2051900, 'prompt_eval_count': 941, 'prompt_eval_cached_count': 0, 'prompt_eval_duration': 383604000, 'eval_count': 1093, 'eval_duration': 17226092000}
+START gemma4_direct 2 2876
+DONE gemma4_direct {'chunk': 2, 'wall_seconds': 13.11249400000088, 'first_translation_seconds': 0.5624346999975387, 'source_characters': 2876, 'output_characters': 2799, 'thinking_characters': 0, 'model': 'gemma4:12b', 'created_at': '2026-09-05T18:25:03.182342Z', 'done': True, 'done_reason': 'stop', 'total_duration': 13104587800, 'load_duration': 1538700, 'prompt_eval_count': 769, 'prompt_eval_cached_count': 0, 'prompt_eval_duration': 316184000, 'eval_count': 809, 'eval_duration': 12543484000}
+WAIT_MODEL hy_mt2_7b

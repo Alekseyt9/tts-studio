@@ -1,0 +1,9 @@
+WAIT_MODEL gemma4_think
+WARMUP gemma4_think
+START gemma4_think 1 3904
+DONE gemma4_think {'chunk': 1, 'wall_seconds': 154.64402929999778, 'primary_wall_seconds': 132.116740999998, 'fallback_used': True, 'final_output_complete': True, 'first_translation_seconds': None, 'source_characters': 3904, 'output_characters': 3946, 'thinking_characters': 32213, 'model': 'gemma4:12b', 'created_at': '2026-09-05T18:46:49.3018388Z', 'done': True, 'done_reason': 'length', 'total_duration': 132097297300, 'load_duration': 1542000, 'prompt_eval_count': 944, 'prompt_eval_cached_count': 0, 'prompt_eval_duration': 383152000, 'eval_count': 8192, 'eval_duration': 131668418000}
+WAIT_MODEL gemma4_direct
+WARMUP gemma4_direct
+START gemma4_direct 1 3904
+DONE gemma4_direct {'chunk': 1, 'wall_seconds': 17.622826999999234, 'primary_wall_seconds': 17.622805699997116, 'fallback_used': False, 'final_output_complete': True, 'first_translation_seconds': 0.4208714999986114, 'source_characters': 3904, 'output_characters': 3910, 'thinking_characters': 0, 'model': 'gemma4:12b', 'created_at': '2026-09-05T18:47:34.6160116Z', 'done': True, 'done_reason': 'stop', 'total_duration': 17610310200, 'load_duration': 1550000, 'prompt_eval_count': 941, 'prompt_eval_cached_count': 0, 'prompt_eval_duration': 389277000, 'eval_count': 1077, 'eval_duration': 17191901000}
+ALL_TRANSLATIONS_DONE

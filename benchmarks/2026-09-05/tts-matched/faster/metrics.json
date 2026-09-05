@@ -1,0 +1,31 @@
+{
+  "engine": "faster",
+  "reference_audio": "F:\\src\\tts\\reference_user_voice_10s.wav",
+  "speaker_only": true,
+  "seed": 20260905,
+  "load_seconds": 11.803205199998047,
+  "warmup_seconds": 17.32198829999834,
+  "versions": {
+    "torch": "2.11.0+cu128",
+    "qwen-tts-hf": "0.1.1.post1",
+    "faster-qwen3-tts": "0.4.0",
+    "omnivoice": "0.2.1",
+    "transformers": "5.16.1"
+  },
+  "chunks": [
+    {
+      "chunk": 1,
+      "characters": 1095,
+      "seconds": 23.558293699999922,
+      "audio_seconds": 72.24,
+      "rtf": 0.32611148532668777,
+      "peak_vram_allocated_gb": 4.954958915710449,
+      "peak_vram_reserved_gb": 6.015625,
+      "rms": 0.11645301431417465,
+      "peak": 0.87109375,
+      "clipped_fraction": 0.0
+    }
+  ],
+  "total_seconds": 23.558293699999922,
+  "audio_seconds": 72.24
+}

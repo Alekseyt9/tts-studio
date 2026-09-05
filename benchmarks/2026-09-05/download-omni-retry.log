@@ -1,0 +1,30 @@
+EXISTS audio_tokenizer/.gitattributes
+EXISTS audio_tokenizer/LICENSE
+EXISTS audio_tokenizer/config.json
+START audio_tokenizer/model.safetensors 805665628 remaining 20
+PROGRESS audio_tokenizer/model.safetensors 78 97
+PROGRESS audio_tokenizer/model.safetensors 94 97
+VERIFIED audio_tokenizer/model.safetensors fe7c5e8785e0a05833e1bfc3e002ec7f55af21e306b2e7154a448c1f54ccfb0d
+EXISTS audio_tokenizer/preprocessor_config.json
+EXISTS chat_template.jinja
+EXISTS config.json
+START model.safetensors 2450344112 remaining 293
+PROGRESS model.safetensors 1 293
+PROGRESS model.safetensors 14 293
+PROGRESS model.safetensors 23 293
+PROGRESS model.safetensors 39 293
+PROGRESS model.safetensors 51 293
+PROGRESS model.safetensors 61 293
+PROGRESS model.safetensors 77 293
+PROGRESS model.safetensors 89 293
+PROGRESS model.safetensors 104 293
+PROGRESS model.safetensors 109 293
+PROGRESS model.safetensors 116 293
+PROGRESS model.safetensors 121 293
+PROGRESS model.safetensors 125 293
+PROGRESS model.safetensors 133 293
+PROGRESS model.safetensors 137 293
+PROGRESS model.safetensors 145 293
+PROGRESS model.safetensors 147 293
+PROGRESS model.safetensors 153 293
+PROGRESS model.safetensors 157 293
