@@ -29,9 +29,11 @@ var ttsModels = []ModelOption{
 }
 
 var translationModels = []ModelOption{
+	{ID:"translategemma_12b",Name:"TranslateGemma 12B",Model:"translategemma:12b",Seconds:16.6686,Speedup:9.278,Note:"Близко к Gemma без рассуждений; остаются ошибки литературных деталей"},
 	{ID: "gemma4_direct", Name: "Gemma 4 12B · без рассуждений", Model: "gemma4:12b", Think: false, Seconds: 17.6228, Speedup: 8.775},
 	{ID: "gemma4_think", Name: "Gemma 4 12B · с рассуждениями", Model: "gemma4:12b", Think: true, Seconds: 154.644, Speedup: 1, Note: "В тесте потребовался повтор после пустого ответа"},
 	{ID: "hy_mt2_1_8b", Name: "Hy-MT2 1.8B Q8", Model: "hy-mt2:1.8b-q8_0", Seconds: 7.1192, Speedup: 21.723, Note: "Быстро, но заметные смысловые ошибки в художественном тексте"},
+	{ID:"hy_mt2_7b",Name:"Hy-MT2 7B Q6",Model:"hy-mt2:7b-q6_k",Seconds:22.9547,Speedup:6.737,Note:"Лучше версии 1.8B, но медленнее Gemma без рассуждений"},
 	{ID: "translategemma_4b", Name: "TranslateGemma 4B", Model: "translategemma:4b", Seconds: 6.7683, Speedup: 22.848, Note: "Ошибки смысла и чисел в тесте; не рекомендуется для книг"},
 }
 
