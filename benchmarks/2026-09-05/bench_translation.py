@@ -5,7 +5,7 @@ OUT=ROOT/'translations-matched';OUT.mkdir(exist_ok=True)
 BASE='http://127.0.0.1:11435/api/'
 corpus=json.loads((ROOT/'corpus.json').read_text(encoding='utf-8'))
 corpus['translation_chunks']=corpus['translation_chunks'][:1]
-profiles=[('gemma4_think','gemma4:12b',True),('gemma4_direct','gemma4:12b',False),('hy_mt2_7b','hy-mt2:7b-q6_k',None),('hy_mt2_1_8b','hf.co/tencent/Hy-MT2-1.8B-GGUF:Q8_0',None),('translategemma_4b','translategemma:4b',None),('translategemma_12b','translategemma:12b',None)]
+profiles=[('gemma4_think','gemma4:12b',True),('gemma4_direct','gemma4:12b',False),('hy_mt2_7b','hy-mt2:7b-q6_k',None),('hy_mt2_1_8b','hy-mt2:1.8b-q8_0',None),('translategemma_4b','translategemma:4b',None),('translategemma_12b','translategemma:12b',None)]
 if len(sys.argv)>1:profiles=[p for p in profiles if p[0] in sys.argv[1:]]
 def api(endpoint,payload):
     req=urllib.request.Request(BASE+endpoint,data=json.dumps(payload).encode(),headers={'Content-Type':'application/json'})

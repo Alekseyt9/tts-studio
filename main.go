@@ -45,6 +45,8 @@ type Chunk struct {
 }
 
 type Job struct {
+	TTSModel             string    `json:"tts_model"`
+	TranslationModel     string    `json:"translation_model"`
 	ID                   string    `json:"id"`
 	Title                string    `json:"title"`
 	SourceText           string    `json:"-"`
@@ -77,6 +79,8 @@ type Job struct {
 }
 
 type createRequest struct {
+	TTSModel             string `json:"tts_model"`
+	TranslationModel     string `json:"translation_model"`
 	Text                 string `json:"text"`
 	Voice                string `json:"voice"`
 	RefAudio             string `json:"ref_audio"`
@@ -105,6 +109,7 @@ type Studio struct {
 }
 
 type OllamaTranslator struct {
+	Profile string
 	URL    string
 	Model  string
 	Client *http.Client
@@ -135,6 +140,7 @@ var ttsChunkMaxTimeout = 20 * time.Minute
 var ttsChunkTimeoutMultiplier = 3.0
 
 type PythonWorker struct {
+	engine    string
 	mu        sync.Mutex
 	processMu sync.Mutex
 	root      string
@@ -211,6 +217,7 @@ func main() {
 	mux.HandleFunc("/api/jobs/", s.jobHandler)
 	mux.HandleFunc("/api/voices", s.voicesHandler)
 	mux.HandleFunc("/api/settings", s.settingsHandler)
+	mux.HandleFunc("/api/models", s.modelsHandler)
 	mux.HandleFunc("/voice-samples/", s.voiceSampleHandler)
 	mux.Handle("/audio/", http.StripPrefix("/audio/", http.FileServer(http.Dir(data))))
 	dist, _ := fs.Sub(webFiles, "web/dist")
@@ -277,13 +284,18 @@ func (s *Studio) jobsHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "reference audio not found", 400)
 			return
 		}
-		if !req.SpeakerOnly && strings.TrimSpace(req.RefText) == "" {
+		if err := normalizeModelIDs(&req.TTSModel, &req.TranslationModel); err != nil {
+			http.Error(w, err.Error(), 400)
+			return
+		}
+		if !strings.HasPrefix(req.TTSModel, "omni") && !req.SpeakerOnly && strings.TrimSpace(req.RefText) == "" {
 			http.Error(w, "reference transcript is required", 400)
 			return
 		}
 		id := strconv.FormatInt(time.Now().UnixNano(), 36)
 		title := titleFrom(req.Text)
 		job := &Job{ID: id, Title: title, SourceText: req.Text, ChunkSize: req.ChunkSize, TranslationChunkSize: req.TranslationChunkSize, Voice: req.Voice, RefAudio: req.RefAudio, RefText: req.RefText, SpeakerOnly: req.SpeakerOnly, AutoMerge: req.AutoMerge, Status: "queued", TranslationStatus: "queued", CreatedAt: time.Now(), Chunks: []*Chunk{}}
+		job.TTSModel, job.TranslationModel = req.TTSModel, req.TranslationModel
 		s.mu.Lock()
 		s.jobs[id] = job
 		s.order = append([]string{id}, s.order...)
@@ -550,12 +562,12 @@ func (s *Studio) worker() {
 			}
 			translated, err := s.translateWithRetries(ctx, job)
 			if s.isDeleted(job) {
-				_ = s.translator.Unload()
+				_ = s.translatorForJob(job).Unload()
 				s.finishJobControl(job.ID)
 				continue
 			}
 			if err != nil {
-				_ = s.translator.Unload()
+				_ = s.translatorForJob(job).Unload()
 				if s.pauseRequested(job) {
 					s.markPaused(job)
 					s.finishJobControl(job.ID)
@@ -579,7 +591,7 @@ func (s *Studio) worker() {
 			job.Progress = 42
 			s.mu.Unlock()
 			if err := s.saveTranslation(job); err != nil {
-				_ = s.translator.Unload()
+				_ = s.translatorForJob(job).Unload()
 				log.Printf("save translation %s: %v", job.ID, err)
 				s.setJob(job, "failed")
 				s.finishJobControl(job.ID)
@@ -596,7 +608,7 @@ func (s *Studio) worker() {
 				}
 			}
 		}
-		if err := s.translator.Unload(); err != nil {
+		if err := s.translatorForJob(job).Unload(); err != nil {
 			if s.pauseRequested(job) {
 				s.markPaused(job)
 				s.finishJobControl(job.ID)
@@ -622,7 +634,7 @@ func (s *Studio) worker() {
 
 		s.setJob(job, "loading_tts")
 		if s.python != nil {
-			if err := s.python.Preload(); err != nil {
+			if err := s.python.Preload(job.TTSModel); err != nil {
 				log.Printf("load TTS model %s: %v; reloading and retrying without limit", job.ID, err)
 				if !s.reloadTTSForRetry(ctx, job, 0) {
 					if s.isDeleted(job) {
@@ -751,7 +763,7 @@ func (s *Studio) reloadTTSForRetry(ctx context.Context, job *Job, chunkID int) b
 			s.setJob(job, "running")
 			return true
 		}
-		if err := s.python.Preload(); err != nil {
+		if err := s.python.Preload(job.TTSModel); err != nil {
 			log.Printf("reload TTS model %s/%d attempt %d: %v; retrying without limit", job.ID, chunkID, reloadAttempt, err)
 			continue
 		}
@@ -1001,7 +1013,7 @@ func (s *Studio) translateWithRetries(ctx context.Context, job *Job) (string, er
 		if err := s.persistJob(job); err != nil {
 			log.Printf("persist translation attempt %s: %v", job.ID, err)
 		}
-		translated, err := s.translator.Translate(
+		translated, err := s.translatorForJob(job).Translate(
 			ctx, job.SourceText, chunkSize, attempt, completedParts,
 			func(done, total int, current float64, section, sections int) {
 				s.setTranslationProgress(job, done, total, current, section, sections)
@@ -1016,7 +1028,7 @@ func (s *Studio) translateWithRetries(ctx context.Context, job *Job) (string, er
 		// A failed generation may leave Gemma with an exhausted or otherwise
 		// unhealthy context. Force Ollama to evict it before any retry so the
 		// next request loads a fresh model instance.
-		if unloadErr := s.translator.Unload(); unloadErr != nil {
+		if unloadErr := s.translatorForJob(job).Unload(); unloadErr != nil {
 			log.Printf("unload Gemma after translation error %s attempt %d: %v", job.ID, attempt, unloadErr)
 		}
 		s.mu.Lock()
@@ -1107,11 +1119,13 @@ This is part %d of %d of one document, section %d of %d.
 			if sectionAttempt > 12 {
 				numPredict = 256
 			}
+			prompt, think := o.translationPrompt(section, prompt)
 			request := ollamaGenerateRequest{
-				Model: o.Model, Prompt: prompt, Stream: true, Think: true, KeepAlive: "10m",
+				Model: o.Model, Prompt: prompt, Stream: true, Think: think, KeepAlive: "10m",
 				Options: map[string]any{
 					"num_ctx": 16384, "num_predict": numPredict, "temperature": temperature,
 					"seed": sectionAttempt*1000 + sectionIndex,
+					"top_k": 64, "top_p": 0.95, "repeat_penalty": 1.0,
 				},
 			}
 			translated, err := o.stream(ctx, request, utf8.RuneCountInString(section), func(current float64) {
@@ -1122,6 +1136,9 @@ This is part %d of %d of one document, section %d of %d.
 				return "", fmt.Errorf("part %d of %d, section %d of %d: %w", i+1, len(parts), sectionIndex+1, len(sections), err)
 			}
 			translated = strings.TrimSpace(translated)
+			if translated == "" && think != true {
+				return "", errors.New("translation model returned an empty response")
+			}
 			if translated == "" {
 				// Some thinking models can spend the entire output allowance on
 				// internal reasoning and never enter the final-answer channel. The
@@ -1349,6 +1366,7 @@ func (s *Studio) synthesizeText(ctx context.Context, job *Job, text, out string)
 	}
 	if s.python != nil {
 		response, err := s.python.Generate(map[string]any{
+			"engine": job.TTSModel,
 			"text": text, "ref_audio": job.RefAudio, "ref_text": job.RefText,
 			"output": out, "language": "Russian", "speaker_only": job.SpeakerOnly,
 		})
@@ -1410,6 +1428,9 @@ func splitTTSFallback(text string, baseSize, attempt int) []string {
 func (p *PythonWorker) Generate(request map[string]any) (pythonResponse, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	engine, _ := request["engine"].(string)
+	delete(request, "engine")
+	p.selectEngine(engine)
 	if p.cmd == nil {
 		if err := p.start(); err != nil {
 			return pythonResponse{}, err
@@ -1436,17 +1457,28 @@ func (p *PythonWorker) Generate(request map[string]any) (pythonResponse, error) 
 	return pythonResponse{}, errors.New("TTS worker stopped unexpectedly")
 }
 
-func (p *PythonWorker) Preload() error {
+func (p *PythonWorker) Preload(engines ...string) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	engine := "qwen"
+	if len(engines) > 0 && engines[0] != "" { engine = engines[0] }
+	p.selectEngine(engine)
 	if p.cmd != nil {
 		return nil
 	}
 	return p.start()
 }
 
+func (p *PythonWorker) selectEngine(engine string) {
+	if engine == "" { engine = "qwen" }
+	if p.engine != engine {
+		p.stop()
+		p.engine = engine
+	}
+}
+
 func (p *PythonWorker) start() error {
-	cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", filepath.Join(p.root, "run.ps1"), "--server")
+	cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", filepath.Join(p.root, "run.ps1"), "--server", "--engine", p.engine)
 	cmd.Dir = p.root
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

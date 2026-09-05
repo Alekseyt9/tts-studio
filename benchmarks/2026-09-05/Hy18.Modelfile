@@ -1,0 +1,2 @@
+FROM F:\src\tts\models\Hy-MT2-1.8B-GGUF\Hy-MT2-1.8B-Q8_0.gguf
+PARAMETER num_ctx 16384

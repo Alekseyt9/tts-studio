@@ -1,0 +1,38 @@
+{
+  "model": "hy-mt2:1.8b-q8_0",
+  "think": null,
+  "options": {
+    "num_ctx": 16384,
+    "num_predict": 8192,
+    "temperature": 0.1,
+    "seed": 1000,
+    "top_k": 64,
+    "top_p": 0.95,
+    "repeat_penalty": 1.0
+  },
+  "chunks": [
+    {
+      "chunk": 1,
+      "wall_seconds": 7.119158000001335,
+      "primary_wall_seconds": 7.11915549999685,
+      "fallback_used": false,
+      "final_output_complete": true,
+      "first_translation_seconds": 0.06990229999792064,
+      "source_characters": 3904,
+      "output_characters": 3831,
+      "thinking_characters": 0,
+      "model": "hy-mt2:1.8b-q8_0",
+      "created_at": "2026-09-05T19:12:01.3807091Z",
+      "done": true,
+      "done_reason": "stop",
+      "total_duration": 7101856200,
+      "load_duration": 1539500,
+      "prompt_eval_count": 901,
+      "prompt_eval_cached_count": 45,
+      "prompt_eval_duration": 57360000,
+      "eval_count": 1525,
+      "eval_duration": 7033125000
+    }
+  ],
+  "total_seconds": 7.119158000001335
+}
