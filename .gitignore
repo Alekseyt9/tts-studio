@@ -3,6 +3,7 @@
 /tts-studio.exe~
 /.cache/
 /.venv/
+/.venv-faster/
 /models/
 /__pycache__/
 *.py[cod]

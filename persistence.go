@@ -18,6 +18,8 @@ type SQLiteStore struct {
 }
 
 type AppSettings struct {
+	TTSModel             string `json:"tts_model"`
+	TranslationModel     string `json:"translation_model"`
 	RefAudio             string `json:"ref_audio"`
 	RefText              string `json:"ref_text"`
 	SpeakerOnly          bool   `json:"speaker_only"`
@@ -115,6 +117,10 @@ CREATE INDEX IF NOT EXISTS jobs_created_at_idx ON jobs(created_at DESC);
 		return err
 	}
 	for _, migration := range []string{
+		`ALTER TABLE jobs ADD COLUMN tts_model TEXT NOT NULL DEFAULT 'qwen'`,
+		`ALTER TABLE jobs ADD COLUMN translation_model TEXT NOT NULL DEFAULT 'gemma4_think'`,
+		`ALTER TABLE app_settings ADD COLUMN tts_model TEXT NOT NULL DEFAULT 'faster'`,
+		`ALTER TABLE app_settings ADD COLUMN translation_model TEXT NOT NULL DEFAULT 'gemma4_direct'`,
 		`ALTER TABLE jobs ADD COLUMN translation_attempt INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE jobs ADD COLUMN error_message TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE jobs ADD COLUMN translation_chunk_size INTEGER NOT NULL DEFAULT 9000`,
@@ -146,8 +152,8 @@ INSERT INTO jobs (
     ref_text, speaker_only, auto_merge, status, progress, translation_status,
     translation_progress, translation_chunk, translation_chunks,
     translated_characters, translation_url, translation_attempt, error_message,
-	translation_chunk_size, created_at, merged_url, merged_path
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	translation_chunk_size, created_at, merged_url, merged_path, tts_model, translation_model
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     title=excluded.title, source_text=excluded.source_text,
     translated_text=excluded.translated_text, chunk_size=excluded.chunk_size,
@@ -164,14 +170,15 @@ ON CONFLICT(id) DO UPDATE SET
 	error_message=excluded.error_message,
 	translation_chunk_size=excluded.translation_chunk_size,
 	created_at=excluded.created_at,
-    merged_url=excluded.merged_url, merged_path=excluded.merged_path
+    merged_url=excluded.merged_url, merged_path=excluded.merged_path,
+	tts_model=excluded.tts_model, translation_model=excluded.translation_model
 `, job.ID, job.Title, job.SourceText, job.Text, job.ChunkSize, job.Voice,
 		job.RefAudio, job.RefText, job.SpeakerOnly, job.AutoMerge, job.Status,
 		job.Progress, job.TranslationStatus, job.TranslationProgress,
 		job.TranslationChunk, job.TranslationChunks, job.TranslatedCharacters,
 		job.TranslationURL, job.TranslationAttempt, job.ErrorMessage,
 		job.TranslationChunkSize, job.CreatedAt.UTC().Format(time.RFC3339Nano),
-		job.MergedURL, job.MergedPath)
+		job.MergedURL, job.MergedPath, job.TTSModel, job.TranslationModel)
 	if err != nil {
 		return err
 	}
@@ -212,13 +219,14 @@ func (s *SQLiteStore) LoadSettings() (AppSettings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	settings := AppSettings{
+		TTSModel: defaultTTSModel, TranslationModel: defaultTranslationModel,
 		RefAudio: "reference_audio_2.wav", SpeakerOnly: true,
 		ChunkSize: 1200, TranslationChunkSize: 4000, AutoMerge: true,
 	}
 	err := s.db.QueryRow(`
-SELECT ref_audio, ref_text, speaker_only, chunk_size, translation_chunk_size, auto_merge
+SELECT ref_audio, ref_text, speaker_only, chunk_size, translation_chunk_size, auto_merge, tts_model, translation_model
 FROM app_settings WHERE id = 1
-`).Scan(&settings.RefAudio, &settings.RefText, &settings.SpeakerOnly, &settings.ChunkSize, &settings.TranslationChunkSize, &settings.AutoMerge)
+`).Scan(&settings.RefAudio, &settings.RefText, &settings.SpeakerOnly, &settings.ChunkSize, &settings.TranslationChunkSize, &settings.AutoMerge, &settings.TTSModel, &settings.TranslationModel)
 	if err == sql.ErrNoRows {
 		return settings, nil
 	}
@@ -229,15 +237,16 @@ func (s *SQLiteStore) SaveSettings(settings AppSettings) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	_, err := s.db.Exec(`
-INSERT INTO app_settings (id, ref_audio, ref_text, speaker_only, chunk_size, translation_chunk_size, auto_merge, updated_at)
-VALUES (1, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO app_settings (id, ref_audio, ref_text, speaker_only, chunk_size, translation_chunk_size, auto_merge, updated_at, tts_model, translation_model)
+VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     ref_audio=excluded.ref_audio, ref_text=excluded.ref_text,
     speaker_only=excluded.speaker_only, chunk_size=excluded.chunk_size,
 	translation_chunk_size=excluded.translation_chunk_size,
-    auto_merge=excluded.auto_merge, updated_at=excluded.updated_at
+    auto_merge=excluded.auto_merge, updated_at=excluded.updated_at,
+	tts_model=excluded.tts_model, translation_model=excluded.translation_model
 `, settings.RefAudio, settings.RefText, settings.SpeakerOnly, settings.ChunkSize, settings.TranslationChunkSize,
-		settings.AutoMerge, time.Now().UTC().Format(time.RFC3339Nano))
+		settings.AutoMerge, time.Now().UTC().Format(time.RFC3339Nano), settings.TTSModel, settings.TranslationModel)
 	return err
 }
 
@@ -249,7 +258,7 @@ SELECT id, title, source_text, translated_text, chunk_size, voice, ref_audio,
        ref_text, speaker_only, auto_merge, status, progress, translation_status,
        translation_progress, translation_chunk, translation_chunks,
 	   translated_characters, translation_url, translation_attempt, error_message,
-	   translation_chunk_size, created_at, merged_url, merged_path
+	   translation_chunk_size, created_at, merged_url, merged_path, tts_model, translation_model
 FROM jobs ORDER BY created_at DESC
 `)
 	if err != nil {
@@ -267,7 +276,7 @@ FROM jobs ORDER BY created_at DESC
 			&job.TranslationChunk, &job.TranslationChunks,
 			&job.TranslatedCharacters, &job.TranslationURL,
 			&job.TranslationAttempt, &job.ErrorMessage, &job.TranslationChunkSize, &created,
-			&job.MergedURL, &job.MergedPath); err != nil {
+			&job.MergedURL, &job.MergedPath, &job.TTSModel, &job.TranslationModel); err != nil {
 			return nil, err
 		}
 		job.CreatedAt, err = time.Parse(time.RFC3339Nano, created)

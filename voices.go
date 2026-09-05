@@ -89,6 +89,10 @@ func (s *Studio) settingsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		settings.RefText = strings.TrimSpace(settings.RefText)
+		if err := normalizeModelIDs(&settings.TTSModel, &settings.TranslationModel); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		if err := s.store.SaveSettings(settings); err != nil {
 			http.Error(w, "could not save settings: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -100,6 +104,8 @@ func (s *Studio) settingsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Studio) normalizeSettings(settings AppSettings) AppSettings {
+	if _, ok := findModel(ttsModels, settings.TTSModel); !ok { settings.TTSModel = defaultTTSModel }
+	if _, ok := findModel(translationModels, settings.TranslationModel); !ok { settings.TranslationModel = defaultTranslationModel }
 	if settings.ChunkSize != 600 && settings.ChunkSize != 1200 && settings.ChunkSize != 2400 {
 		settings.ChunkSize = 1200
 	}
