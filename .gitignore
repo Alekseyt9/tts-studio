@@ -5,6 +5,7 @@
 /.venv/
 /.venv-faster/
 /models/
+/benchmarks/
 /__pycache__/
 *.py[cod]
 .env
