@@ -23,6 +23,11 @@ function Toggle({checked,onChange,label}) {
 }
 
 function App() {
+  const [playbackRate,setPlaybackRate]=useState(()=>{
+    try { const saved=Number(window.localStorage.getItem('tts-studio.playback-rate')); if(saved>=0.5&&saved<=1.5)return saved; } catch {}
+    return 0.8;
+  });
+  useEffect(()=>{try{window.localStorage.setItem('tts-studio.playback-rate',String(playbackRate))}catch{}},[playbackRate]);
   const [playback]=useState(()=>{try{return new PlaybackMemory(window.localStorage)}catch{return new PlaybackMemory(null)}});
   const [,refreshBookmark]=useState(0);
   const bookmarkChanged=()=>refreshBookmark(value=>value+1);
@@ -138,9 +143,16 @@ function App() {
             <a className={!active.merged_url?'disabled':''} href={active.merged_url||undefined} download><DownloadSimple/>Скачать итог</a>
             <button disabled={!active.chunks.length||ready!==active.chunks.length||active.status==='merging'} onClick={()=>merge(active.id)}><Waveform/>{active.status==='merging'?'Склеиваем…':'Склеить вручную'}</button>
           </div>
+          <div className="playback-speed">
+            <label htmlFor="playback-speed">Скорость прослушивания</label>
+            <input id="playback-speed" type="range" min="0.5" max="1.5" step="0.05" value={playbackRate} onChange={event=>setPlaybackRate(Number(event.target.value))}/>
+            <output htmlFor="playback-speed">{playbackRate.toLocaleString('ru-RU',{maximumFractionDigits:2})}×</output>
+            <button type="button" onClick={()=>setPlaybackRate(1)}>1×</button>
+            <small>Без изменения высоты голоса. Скачиваемое аудио — в исходном темпе.</small>
+          </div>
           {active.chunks.length===0?(active.status==='failed'?<div className="failure-state"><WarningCircle/><strong>Перевод остановлен</strong><span>{active.error_message||'Не удалось завершить переводческий чанк'}</span><small>Готово {active.translation_chunk} из {active.translation_chunks||1} чанков</small><button onClick={()=>controlJob(active,'retry')}><ArrowClockwise/>Повторить {Math.min(active.translation_chunk+1,active.translation_chunks||1)}-й чанк</button></div>:<div className="phase-wait"><SpinnerGap className={workingStatuses.includes(active.status)?'spin':''}/><strong>{statusText[active.status]}</strong><span>{active.status==='translating'?`Чанк ${Math.min(active.translation_chunk+1,active.translation_chunks||1)} из ${active.translation_chunks||1}${active.translation_sections?` · секция ${active.translation_section} из ${active.translation_sections}`:''} · ≈ ${active.translation_progress}%${active.translation_attempt>1?` · попытка ${active.translation_attempt}`:''}`:active.status==='paused'?'Незавершённый чанк начнётся с начала':'Подготовка модели'}</span></div>):<div className="chunk-table"><div className="chunk-table-head"><span>#</span><span>ФРАГМЕНТ</span><span>СТАТУС</span><span>АУДИО</span><span>ВРЕМЯ</span><span></span></div><div className="chunk-scroll">{active.chunks.map((chunk,index)=><div className={`chunk-row ${chunk.status==='running'?'active':''} ${listeningChunk?.id===chunk.id?'listening':''}`} key={`${active.id}:${chunk.id}`}>
             <span>{index+1}</span><span className="chunk-name"><strong>{chunk.start}–{chunk.end}</strong><small>{chunk.characters} знаков</small>{chunk.status==='ready'&&chunk.tts_model&&<small title={modelName('tts',chunk.tts_model)}>{modelName('tts',chunk.tts_model)}</small>}</span><span className="chunk-state"><Status value={chunk.status}/>{chunk.status==='running'&&<small>≈ {chunk.progress||5}%</small>}</span>
-            <span className="chunk-audio">{chunk.status==='ready'?<><ChunkAudio key={`${active.id}:${chunk.id}:${chunk.audio_url}`} jobId={active.id} chunk={chunk} memory={playback} audioRefs={chunkAudioRefs} onBookmark={bookmarkChanged} onPlay={()=>stopOtherChunks(chunkAudioKey(active,chunk))} onEnded={()=>playNextChunk(active,index)}/><a href={chunk.audio_url} download title="Скачать"><DownloadSimple/></a></>:<i><em style={{width:chunk.status==='running'?`${chunk.progress||5}%`:'0%'}}/></i>}</span>
+            <span className="chunk-audio">{chunk.status==='ready'?<><ChunkAudio key={`${active.id}:${chunk.id}:${chunk.audio_url}`} jobId={active.id} chunk={chunk} playbackRate={playbackRate} memory={playback} audioRefs={chunkAudioRefs} onBookmark={bookmarkChanged} onPlay={()=>stopOtherChunks(chunkAudioKey(active,chunk))} onEnded={()=>playNextChunk(active,index)}/><a href={chunk.audio_url} download title="Скачать"><DownloadSimple/></a></>:<i><em style={{width:chunk.status==='running'?`${chunk.progress||5}%`:'0%'}}/></i>}</span>
             <span className="chunk-time">{chunk.status==='running'?<><strong>{runtime(chunk.elapsed_seconds)}</strong><small>прошло</small></>:chunk.status==='ready'?<><strong>{chunk.synthesis_seconds>0?runtime(chunk.synthesis_seconds):'—'}</strong><small>{chunk.duration?`${chunk.duration.toFixed(1)} с аудио`:'готово'}</small></>:<strong>—</strong>}</span><span></span>
           </div>)}</div></div>}
           <div className="active-footer"><span>Общее время <strong>{runtime(elapsed)}</strong></span><span>Озвучено <strong>{ready}/{active.chunks.length||0}</strong></span><span>Готово через <strong>{remaining?`≈ ${runtime(remaining)}`:'—'}</strong></span></div>

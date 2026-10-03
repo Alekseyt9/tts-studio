@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-export function ChunkAudio({ jobId, chunk, memory, audioRefs, onPlay, onEnded, onBookmark }) {
+export function ChunkAudio({ jobId, chunk, playbackRate = 1, memory, audioRefs, onPlay, onEnded, onBookmark }) {
   const element = useRef(null);
   const callbacks = useRef({ onPlay, onEnded, onBookmark });
   callbacks.current = { onPlay, onEnded, onBookmark };
@@ -11,6 +11,13 @@ export function ChunkAudio({ jobId, chunk, memory, audioRefs, onPlay, onEnded, o
   const save = audio => {
     if (restored.current) memory.update(jobId, chunk.id, chunk.audio_url, audio.currentTime);
   };
+
+  useEffect(() => {
+    const audio = element.current;
+    audio.preservesPitch = true;
+    audio.defaultPlaybackRate = playbackRate;
+    audio.playbackRate = playbackRate;
+  }, [playbackRate]);
 
   useEffect(() => {
     const audio = element.current;
