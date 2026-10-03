@@ -28,7 +28,7 @@ func resumeTestStudio(t *testing.T) (*Studio, *Job) {
 }
 
 func TestResumeChangesOnlyRemainingTTSAndPersistsSelection(t *testing.T) {
-	for _, engine := range []string{"faster", "omni32", "omni16"} {
+	for _, engine := range []string{"faster", "faster_stress", "omni32", "omni16"} {
 		t.Run(engine, func(t *testing.T) {
 			s, job := resumeTestStudio(t)
 			w := httptest.NewRecorder()

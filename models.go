@@ -22,6 +22,7 @@ type ModelOption struct {
 }
 
 var ttsModels = []ModelOption{
+	{ID: "faster_stress", Name: "Faster Qwen3-TTS · русские ударения", Note: "Русский LoRA-адаптер; перевод с ударениями по смыслу. Расшифровка образца используется автоматически. Скорость отдельно не замерена."},
 	{ID: "faster", Name: "Faster Qwen3-TTS", Seconds: 23.5583, Speedup: 8.519, LoadSeconds: 11.803, WarmupSeconds: 17.322, Note: "Качество подтверждено прослушиванием"},
 	{ID: "omni32", Name: "OmniVoice · 32 шага", Seconds: 16.1103, Speedup: 12.458, LoadSeconds: 7.996, WarmupSeconds: 2.739, Note: "Более медленный темп речи; транскрипт образца распознаётся автоматически"},
 	{ID: "omni16", Name: "OmniVoice · 16 шагов", Seconds: 8.4254, Speedup: 23.82, LoadSeconds: 7.022, WarmupSeconds: 1.509, Note: "Самый быстрый в тесте; транскрипт образца распознаётся автоматически"},
@@ -72,6 +73,7 @@ func (s *Studio) modelsHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Studio) translatorForJob(job *Job) *OllamaTranslator {
 	translator := *s.translator
+	translator.AddStress = job.TTSModel == "faster_stress"
 	// Empty IDs belong to legacy in-memory jobs and retain the configured translator.
 	if option, ok := findModel(translationModels, job.TranslationModel); ok {
 		translator.Model = option.Model
@@ -80,7 +82,8 @@ func (s *Studio) translatorForJob(job *Job) *OllamaTranslator {
 	return &translator
 }
 
-func (o *OllamaTranslator) translationPrompt(source, legacy string) (string, any) {
+func (o *OllamaTranslator) translationPrompt(source, legacy string) (prompt string, think any) {
+	defer func() { prompt = o.stressPrompt(prompt) }()
 	if option, ok := findModel(translationModels, o.Profile); ok {
 		switch option.ID {
 		case "hy_mt2_1_8b", "hy_mt2_7b":

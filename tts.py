@@ -15,12 +15,17 @@ ENGINE = "qwen"
 
 def load_model():
     torch.set_num_threads(8)
-    if ENGINE == "faster":
+    if ENGINE in ("faster", "faster_stress"):
         from faster_qwen3_tts import FasterQwen3TTS
-        return FasterQwen3TTS.from_pretrained(
+        model = FasterQwen3TTS.from_pretrained(
             str(MODEL), device="cuda", dtype=torch.bfloat16,
             attn_implementation="sdpa", max_seq_len=2048, local_files_only=True,
         )
+        if ENGINE == "faster_stress":
+            from stress_adapter import apply_russian_stress_adapter
+            count = apply_russian_stress_adapter(model, ROOT / "models" / "Qwen3-TTS-Russian-Stress-LoRA")
+            print(f"Russian stress adapter loaded: {count} matrices", file=sys.stderr, flush=True)
+        return model
     if ENGINE.startswith("omni"):
         from omnivoice import OmniVoice
         return OmniVoice.from_pretrained(
@@ -57,7 +62,7 @@ def reference_transcript(ref_audio):
 
 
 def synthesize(model, *, text, ref_audio, ref_text, output, language="Russian", speaker_only=False):
-    if not ENGINE.startswith("omni") and not speaker_only and not ref_text:
+    if ENGINE != "faster_stress" and not ENGINE.startswith("omni") and not speaker_only and not ref_text:
         raise ValueError("ref_text is required unless speaker_only is enabled")
     if ENGINE.startswith("omni"):
         wavs = model.generate(text=text, language=language, ref_audio=ref_audio,
@@ -65,7 +70,12 @@ def synthesize(model, *, text, ref_audio, ref_text, output, language="Russian", 
                               num_step=32 if ENGINE == "omni32" else 16)
         sample_rate = 24000
     else:
-        options = {"xvec_only" if ENGINE == "faster" else "x_vector_only_mode": speaker_only}
+        if ENGINE == "faster_stress":
+            # Match the ICL mode of the successful listening test and LoRA training.
+            ref_text = ref_text or reference_transcript(ref_audio)
+            options = {"xvec_only": False}
+        else:
+            options = {"xvec_only" if ENGINE == "faster" else "x_vector_only_mode": speaker_only}
         wavs, sample_rate = model.generate_voice_clone(
             text=text, language=language, ref_audio=ref_audio, ref_text=ref_text, **options)
     output = Path(output).resolve()
@@ -99,7 +109,7 @@ def main() -> None:
     global ENGINE
     parser = argparse.ArgumentParser(description="Russian voice cloning with Qwen3-TTS 1.7B Base")
     parser.add_argument("--server", action="store_true", help="Keep the model loaded and accept JSONL requests on stdin")
-    parser.add_argument("--engine", choices=["qwen", "faster", "omni32", "omni16"], default="qwen")
+    parser.add_argument("--engine", choices=["qwen", "faster", "faster_stress", "omni32", "omni16"], default="qwen")
     parser.add_argument("--text", help="Text to synthesize")
     parser.add_argument("--ref-audio", help="Reference WAV/MP3 file")
     parser.add_argument("--ref-text", help="Exact transcript of the reference audio")
@@ -120,7 +130,7 @@ def main() -> None:
         return
     if not args.text or not args.ref_audio:
         parser.error("--text and --ref-audio are required")
-    if not ENGINE.startswith("omni") and not args.speaker_only and not args.ref_text:
+    if ENGINE != "faster_stress" and not ENGINE.startswith("omni") and not args.speaker_only and not args.ref_text:
         parser.error("--ref-text is required unless --speaker-only is used")
 
     model = load_model()

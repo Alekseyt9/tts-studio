@@ -30,8 +30,10 @@ function App() {
   const [resumeModels,setResumeModels]=useState({});
   const [ttsModel,setTTSModel]=useState('faster'), [translationModel,setTranslationModel]=useState('gemma4_direct');
   const omni=ttsModel.startsWith('omni');
+  const stress=ttsModel==='faster_stress';
+  const autoTranscript=omni||stress;
   const modelName=(kind,id)=>models[kind].find(m=>m.id===id)?.name||id;
-  const speedLabel=m=>`${m.name} — ${m.seconds.toFixed(1)} с · ×${m.speedup.toFixed(1)}`;
+  const speedLabel=m=>m.seconds>0?`${m.name} — ${m.seconds.toFixed(1)} с · ×${m.speedup.toFixed(1)}`:m.name;
   const selectedTTS=models.tts.find(m=>m.id===ttsModel);
   const selectedTranslation=models.translation.find(m=>m.id===translationModel);
   useEffect(()=>{fetch('/api/models').then(r=>r.json()).then(setModels).catch(e=>setError(`Не удалось загрузить модели: ${e.message}`))},[]);
@@ -75,7 +77,7 @@ function App() {
 
   const chooseVoice=voice=>{setRefAudio(voice.ref_audio);if(voice.transcript)setRefText(voice.transcript);setVoiceOpen(false);setVoiceSearch('')};
   const loadTextFile=async event=>{const file=event.target.files?.[0];event.target.value='';if(!file)return;if(!file.name.toLocaleLowerCase().endsWith('.txt')){setError('Выберите файл с расширением .txt');return}try{const content=(await file.text()).replace(/^\uFEFF/,'');setText(content);setSourceFileName(file.name);setError('')}catch(e){setError(`Не удалось прочитать TXT-файл: ${e.message}`)}};
-  const submit=async()=>{if(!text.trim()||(!omni&&!speakerOnly&&!refText.trim()))return;setBusy(true);setError('');try{const res=await fetch('/api/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tts_model:ttsModel,translation_model:translationModel,text,voice:'clone',ref_audio:refAudio,ref_text:refText,speaker_only:speakerOnly,chunk_size:Number(chunkSize),translation_chunk_size:Number(translationChunkSize),auto_merge:autoMerge})});if(!res.ok)throw new Error(await res.text());const job=await res.json();setJobs(current=>[job,...current.filter(item=>item.id!==job.id)]);setSelected(current=>current||job.id);setText('');setSourceFileName('');load()}catch(e){setError(e.message)}finally{setBusy(false)}};
+  const submit=async()=>{if(!text.trim()||(!autoTranscript&&!speakerOnly&&!refText.trim()))return;setBusy(true);setError('');try{const res=await fetch('/api/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tts_model:ttsModel,translation_model:translationModel,text,voice:'clone',ref_audio:refAudio,ref_text:refText,speaker_only:speakerOnly,chunk_size:Number(chunkSize),translation_chunk_size:Number(translationChunkSize),auto_merge:autoMerge})});if(!res.ok)throw new Error(await res.text());const job=await res.json();setJobs(current=>[job,...current.filter(item=>item.id!==job.id)]);setSelected(current=>current||job.id);setText('');setSourceFileName('');load()}catch(e){setError(e.message)}finally{setBusy(false)}};
   const merge=async id=>{const res=await fetch(`/api/jobs/${id}/merge`,{method:'POST'});if(!res.ok)setError(await res.text());load()};
   const clearReady=async()=>{await fetch('/api/jobs/ready',{method:'DELETE'});setSelected(null);load()};
   const removeJob=async id=>{if(!window.confirm('Удалить задание из очереди и базы данных? Аудиофайлы на диске останутся.'))return;const res=await fetch(`/api/jobs/${id}`,{method:'DELETE'});if(!res.ok){setError(await res.text());return}if(selected===id)setSelected(null);load()};
@@ -151,19 +153,20 @@ function App() {
         <div className="voice-title"><span>ВЫБРАННЫЙ ГОЛОС</span><button onClick={()=>setVoiceOpen(true)}><Headphones/>Библиотека голосов</button></div>
         <div className="voice-preview"><SpeakerHigh/><strong>{selectedVoice?.name||'Загрузка…'}</strong>{selectedVoice&&<audio controls preload="metadata" src={selectedVoice.audio_url}/>}</div>
         <button className={`transcript-toggle ${transcriptOpen?'open':''}`} onClick={()=>setTranscriptOpen(!transcriptOpen)}><span>ТРАНСКРИПТ</span><b>{transcriptOpen?'−':'+'}</b></button>
-        {transcriptOpen&&<input className="transcript-input" value={refText} onChange={e=>setRefText(e.target.value)} disabled={speakerOnly&&!omni} placeholder={omni?'Пусто — распознать образец автоматически':speakerOnly?'Не нужен в режиме «только тембр»':'Точный текст образца'}/>} 
+        {transcriptOpen&&<input className="transcript-input" value={refText} onChange={e=>setRefText(e.target.value)} disabled={speakerOnly&&!autoTranscript} placeholder={autoTranscript?'Пусто — распознать образец автоматически':speakerOnly?'Не нужен в режиме «только тембр»':'Точный текст образца'}/>}
         <div className="settings-title">МОДЕЛИ</div>
         <label className="model-setting"><span>Переводчик</span><select aria-label="Модель перевода" value={translationModel} onChange={e=>setTranslationModel(e.target.value)}>{models.translation.map(m=><option key={m.id} value={m.id}>{speedLabel(m)}</option>)}</select></label>
         {selectedTranslation&&<p className="model-note"><strong>{selectedTranslation.seconds.toLocaleString('ru-RU',{maximumFractionDigits:1})} с · ускорение ×{selectedTranslation.speedup.toLocaleString('ru-RU',{maximumFractionDigits:1})}</strong>{selectedTranslation.note&&<><br/>{selectedTranslation.note}</>}</p>}
         <label className="model-setting"><span>Озвучка</span><select aria-label="Модель озвучки" value={ttsModel} onChange={e=>setTTSModel(e.target.value)}>{models.tts.map(m=><option key={m.id} value={m.id}>{speedLabel(m)}</option>)}</select></label>
-        {selectedTTS&&<p className="model-note"><strong>{selectedTTS.seconds.toLocaleString('ru-RU',{maximumFractionDigits:1})} с · ускорение ×{selectedTTS.speedup.toLocaleString('ru-RU',{maximumFractionDigits:1})}</strong>{selectedTTS.note&&<><br/>{selectedTTS.note}</>}</p>}
+        {selectedTTS&&<p className="model-note">{selectedTTS.seconds>0&&<strong>{selectedTTS.seconds.toLocaleString('ru-RU',{maximumFractionDigits:1})} с · ускорение ×{selectedTTS.speedup.toLocaleString('ru-RU',{maximumFractionDigits:1})}</strong>}{selectedTTS.note&&<>{selectedTTS.seconds>0&&<br/>}{selectedTTS.note}</>}</p>}
+        {stress&&<p className="model-note">В новых заданиях переводчик расставляет ударения по смыслу. Проверяйте их в скачанном переводе. При продолжении старого задания готовый перевод сохраняется без новой разметки.</p>}
         <details className="benchmark-note"><summary>Как сравнивалась скорость</summary><p>Один прогон на RTX 5070: перевод — 3 904 знака, контекст 16K; озвучка — 1 095 знаков, один голос. × — ускорение относительно Gemma с рассуждениями или обычного Qwen3-TTS. Меньше секунд — быстрее.</p><p>Время после прогрева, без загрузки. Первый запуск дольше. Загрузка выбранного TTS: {selectedTTS?.load_seconds?.toFixed(1)||'—'} с. Прогрев: {selectedTTS?.warmup_seconds?.toFixed(1)||'—'} с. Темп речи у моделей отличается.</p></details>
         <div className="settings-title">НАСТРОЙКИ</div>
         <label className="setting-row"><span>Чанк перевода</span><select value={translationChunkSize} onChange={e=>setTranslationChunkSize(e.target.value)}><option value="2500">2 500 знаков</option><option value="4000">4 000 знаков</option><option value="6000">6 000 знаков</option></select></label>
         <label className="setting-row"><span>Размер фрагмента</span><select value={chunkSize} onChange={e=>setChunkSize(e.target.value)}><option value="600">600 знаков</option><option value="1200">1 200 знаков</option><option value="2400">2 400 знаков</option></select></label>
         <div className="setting-row"><span>Автосклейка</span><div><Toggle checked={autoMerge} onChange={()=>setAutoMerge(!autoMerge)} label="Автосклейка"/><small>{autoMerge?'Включена':'Выключена'}</small></div></div>
-        {!omni&&<div className="setting-row"><span>Только тембр</span><div><Toggle checked={speakerOnly} onChange={()=>setSpeakerOnly(!speakerOnly)} label="Только тембр"/><small>{speakerOnly?'Включён':'Выключен'}</small></div></div>}
-        <button className="add-job" disabled={!text.trim()||busy||health.mode==='offline'||(!omni&&!speakerOnly&&!refText.trim())} onClick={submit}><Plus weight="bold"/>{busy?'Добавляем…':'Добавить в очередь'}</button>
+        {!autoTranscript&&<div className="setting-row"><span>Только тембр</span><div><Toggle checked={speakerOnly} onChange={()=>setSpeakerOnly(!speakerOnly)} label="Только тембр"/><small>{speakerOnly?'Включён':'Выключен'}</small></div></div>}
+        <button className="add-job" disabled={!text.trim()||busy||health.mode==='offline'||(!autoTranscript&&!speakerOnly&&!refText.trim())} onClick={submit}><Plus weight="bold"/>{busy?'Добавляем…':'Добавить в очередь'}</button>
       </aside>
     </main>
 
